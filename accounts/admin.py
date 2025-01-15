@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import State, Profession, Language, Hobby, Profile, ProfilePicture
+from .models import OTP, State, Profession, Language, Hobby, Profile, ProfilePicture
+
+
+@admin.register(OTP)
+class OTPAdmin(admin.ModelAdmin):
+    search_fields = ['email']
+    list_filter = ['email']
+    readonly_fields = ['created_at']
 
 @admin.register(State)
 class StateAdmin(admin.ModelAdmin):
