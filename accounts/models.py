@@ -42,12 +42,12 @@ class GenderChoices(models.TextChoices):
 
 class Profile(models.Model):
     GENDER_CHOICES = (
-        ('Male', 'Male'),
-        ('Female', 'Female'),
-        ('Other', 'Other'),
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
     )
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    models.CharField(choices=GenderChoices.choices, max_length=6)
+    gender = models.CharField(choices=GenderChoices.choices, max_length=6, null=True) # need to remove null
     dob = models.DateField()
     profile_picture = models.ImageField(upload_to='profile_pics/', null=True)
     bio = models.TextField(null=True)

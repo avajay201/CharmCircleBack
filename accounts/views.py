@@ -3,12 +3,14 @@ from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils.timezone import now
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import OTP, State, Profession, Language, Hobby
+from .models import OTP, Profile, State, Profession, Language, Hobby
 import os
 import random
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import RegisterSerializer, StateSerializer, ProfessionSerializer, LanguageSerializer, HobbySerializer
@@ -20,7 +22,7 @@ class SendEmailOTP(APIView):
     def post(self, request):
         email = request.data.get('email')
         username = request.data.get('username')
-        
+
         if username:
             user = User.objects.filter(username=username).first()
             if user:
@@ -76,9 +78,16 @@ class Registration(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            user = serializer.save()
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            return Response({
+                'message': 'Registration completed successfully',
+                'access_token': access_token,
+            }, status=status.HTTP_201_CREATED)
+
+        first_error = next(iter(serializer.errors.values()))[0]
+        return Response({'error': first_error}, status=status.HTTP_400_BAD_REQUEST)
 
 class FaceVerification(APIView):
     permission_classes = [IsAuthenticated]
@@ -112,7 +121,7 @@ class ProfileVerification(APIView):
 
         temps_folder = os.path.join(settings.BASE_DIR, 'temps')
         os.makedirs(temps_folder, exist_ok=True)
-        
+
         try:
             file_extension = video.name.split('.')[-1]
             filename = f"{uuid.uuid4().hex}.{file_extension}"
@@ -124,12 +133,44 @@ class ProfileVerification(APIView):
         try:
             profile_status = verify_profile(video_path, img)
             if profile_status == True:
-                return Response({'msg': 'Profile verification completed'}, status=status.HTTP_200_OK)
+                profile = Profile.objects.get(user=request.user)
+                profile.profile_verified = True
+                profile.profile_picture = img
+                profile.save()
+                return Response({'message': 'Profile verification completed'}, status=status.HTTP_200_OK)
             else:
                 return Response({'error': 'Profile verification failed'}, status=status.HTTP_400_BAD_REQUEST)
+        except Profile.DoesNotExist:
+            return Response({'error': 'Profile does not exists'}, status=status.HTTP_400_BAD_REQUEST)
+        except Profile.MultipleObjectsReturned:
+            return Response({'error': 'Multiple profile detection'}, status=status.HTTP_400_BAD_REQUEST)
         except:
             return Response({'error': 'Something went wrong'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class Login(APIView):
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if not username or not password:
+            return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(username=username, password=password)
+        
+        if user:
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            profile = Profile.objects.filter(user=user).first()
+            
+            return Response({
+                'message': 'Login successful',
+                'access_token': access_token,
+                'profile_verified': profile.profile_verified,
+                'profile_completed': profile.profile_completed,
+            }, status=status.HTTP_200_OK)
+        
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        
 class ProfileCreateData(APIView):
     permission_classes = [IsAuthenticated]
 

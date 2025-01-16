@@ -15,6 +15,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         gender = validated_data.pop('gender')
         dob = validated_data.pop('dob')
         user = User.objects.create_user(**validated_data)
+        print(user, '|', gender, '|', dob)
         Profile.objects.create(user=user, gender=gender, dob=dob)
         return user
 
